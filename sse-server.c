@@ -153,6 +153,7 @@ static struct option longopts[] = {
 
 static SSL_CTX *ssl_context = NULL;
 static bool allow_commands = false;
+static bool stop = false;      /* Control the poll() loop in main() */
 
 
 /* usage -- print error and usage message, then exit */
@@ -292,15 +293,16 @@ static void accept_new_connection(const int sock, const int client_type)
 }
 
 
-/* wants_channel -- check client fd is subscribed to channel t */
-static bool wants_channel(const int fd, const char *t)
+/* is_subscribed_to -- check if client fd is subscribed to any of channels */
+static bool is_subscribed_to(const int fd, char **const channels, int nchannels)
 {
-  int j;
+  int i, j;
 
   if (clients[fd].nchannels < 0) return false; /* It's not a web client (yet) */
   if (clients[fd].nchannels == 0) return true; /* Client wants all */
   for (j = 0; j < clients[fd].nchannels; j++)
-    if (strcmp(clients[fd].channels[j], t) == 0) return true;
+    for (i = 0; i < nchannels; i++)
+      if (strcmp(clients[fd].channels[j], channels[i]) == 0) return true;
   return false;
 }
 
@@ -352,9 +354,9 @@ static void write_all(const int fd, char * const data, const int len)
 }
 
 
-/* send_event_to_web_clients -- send event t with data v to a channel */
-static void send_event_to_web_clients(const char *channel, const char *t,
-  const char *v)
+/* send_event_to_web_clients -- send event t with data v to channels */
+static void send_event_to_web_clients(char **const channels, int nchannels,
+  const char *t, const char *v)
 {
   char *chunk;
   bool found;
@@ -362,13 +364,13 @@ static void send_event_to_web_clients(const char *channel, const char *t,
 
   chunk = create_chunk(t, v, &len);
   for (found = false, j = 0; j < nclients; j++)
-    if (wants_channel(j, channel)) {
+    if (is_subscribed_to(j, channels, nchannels)) {
       write_all(j, chunk, len);
       logger("Sent event \"%s\" with data \"%s\" to web client %d (%s)",
 	t, v, j, clients[j].host);
       found = true;
     }
-  if (!found) logger("No web clients on channel \"%s\"", channel);
+  if (!found) logger("No subscribed web clients");
   free(chunk);
 }
 
@@ -380,14 +382,7 @@ static void process_command(const char *t)
 
   if (strcmp(t, "halt") == 0) {
 
-    /* Close all clients. Send termination event to web clients. */
-    for (j = nclients - 1; j >= 0; j--)
-      if (pfds[j].fd >= 0) {
-	if (clients[j].nchannels >= 0) write_all(j, "0\r\n\r\n", 5);
-	close_client(j);
-      }
-    logger("Stopping");
-    exit(0);
+    stop = true;
 
   } else if (strcmp(t, "status") == 0) {
 
@@ -482,12 +477,12 @@ static void handle_command(const int fd)
 
     logger("Received from %d (%s): %s=%s", fd, clients[fd].host, t, v);
 
-    /* Send to all  clients interested in this channel. */
+    /* Send to all clients interested in this channel. */
     if (!(u = index(t, '/'))) {	/* Split into channel and event type */
-      send_event_to_web_clients(t, "message", v);
+      send_event_to_web_clients(&t, 1, "message", v);
     } else {
       *u = '\0';
-      send_event_to_web_clients(t, u + 1, v);
+      send_event_to_web_clients(&t, 1, u + 1, v);
     }
 
   } else {			/* No '=' means it's a command */
@@ -602,7 +597,7 @@ static char *unesc(char *s)
 static void read_request(const int fd, const char *url_path)
 {
   char *t, *end_of_headers, *q, *v, **channels, sep;
-  int n = 1, len, nchannels, i;
+  int n = 1, len, nchannels;
   bool is_head;
 
   /* Make room in the input buffer for at least 1024 more bytes. */
@@ -705,8 +700,7 @@ static void read_request(const int fd, const char *url_path)
 	*(v++) = '\0';
 	unesc(t); unesc(v);
 	logger("Received from %d (%s): %s=%s", fd, clients[fd].host, t, v);
-	for (i = 0; i < nchannels; i++) /* Send to all channels */
-	  send_event_to_web_clients(channels[i], t, v);
+	send_event_to_web_clients(channels, nchannels, t, v);
       } else {				/* No '=', so it's a command */
 	unesc(t);
 	logger("Received from %d (%s): %s", fd, clients[fd].host, t);
@@ -931,7 +925,7 @@ int main(int argc, char *argv[])
   if (!nodaemon) logger("Running in background, process id %d", pid);
 
   /* Listen for connections, until killed. */
-  while (nclients != 0) {
+  while (!stop) {
     nready = poll(pfds, nclients, -1);
     if (nready == -1 && errno == EINTR) continue; /* Interrupted by signal */
     if (nready == -1) log_err(EX_OSERR, "While polling");
@@ -962,5 +956,12 @@ int main(int argc, char *argv[])
   }
 
   /* TODO: Refuse connections if that would make nclients > RLIMIT_NOFILE */
-  log_errx(EX_SOFTWARE, "No more sockets to listen on!?");
+
+  /* Close all clients. Send termination event to web clients. */
+  for (j = nclients - 1; j >= 0; j--)
+    if (pfds[j].fd >= 0) {
+      if (clients[j].nchannels >= 0) write_all(j, "0\r\n\r\n", 5);
+      close_client(j);
+    }
+  logger("Stopping");
 }
