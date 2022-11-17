@@ -177,14 +177,15 @@ static void help(void)
   printf("sse-server sents server-sent events to HTTP clients\n");
   printf("Usage: sse-server [options]\n");
   printf("  --controlport, -P <port>  Listen for commands on <port>\n");
-  printf("  --fifo, -f <file>         Listen for commands of <fifo>\n");
+  printf("  --fifo, -F <file>         Listen for commands of <fifo>\n");
   printf("  --port, -p <port>         Listen for web clients on <port>\n");
   printf("  --url, -u <path>          URL path must begin with <path>\n");
   printf("  --cert, -c <certfile>     Turn on SSL, use certificate <cert>\n");
   printf("  --privkey, -k <privkey>   SSL private key from file <privkey>\n");
-  printf("  --logfile, -h <file>      Append a log to <file>\n");
+  printf("  --logfile, -l <file>      Append a log to <file>\n");
   printf("  --user, -U <user>         Run as <user>\n");
   printf("  --nodaemon, -n            Run in foreground\n");
+  printf("  --allowcommands, -a       Allow commands in URL queries\n");
   printf("  --help, -h                This help\n");
   printf("At least one of --controlport and --fifo must be present.\n");
 }
