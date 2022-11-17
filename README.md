@@ -59,7 +59,7 @@ You can send multiple messages to multiple channels in one go:
 
 This sends two messages (type ‘q1’ with data ‘go’ and type ‘q2’ with
 data ‘end’) to both the color and page channels. (Clients subscribed
-to both will get the messages twice.)
+to both channels will only get the messages once.)
 
 To send those same two messages via the FIFO or the control port,
 write these four lines to them:
@@ -68,6 +68,9 @@ write these four lines to them:
    page/q1 = go
    color/q2 = end
    page/q2 = end
+
+(Except that, unlike with the URL query above, clients subscribed to
+both the ‘color’ and ‘page’ channels will get the messages twice.)
 
 White space at the start and end, and around the ‘=’, will be ignored.
 
