@@ -1,8 +1,10 @@
 # SSE-Server
 
 SSE-Server implements an HTTP server that sends Server-Sent Events
-(SSE) to connected web clients. (Typically: web pages with JavaScript
-that uses the EventSource API.)
+(see [section 9.2 of
+HTML5](https://html.spec.whatwg.org/multipage/server-sent-events.html)
+to connected web clients. (Typically: web pages with JavaScript that
+uses the EventSource API.)
 
 SSE-Server supports SSL, but does not implement any form of
 authentication. (It is possible to use Apache or another web server as
@@ -116,5 +118,3 @@ And use it as normal, but on port 80 (http) or 443 (https), not 8080:
 
    https://www.example.org/my/sse/server/channel71
 
-SSE is defined in [section 9.2 of
-HTML5](https://html.spec.whatwg.org/multipage/server-sent-events.html)
