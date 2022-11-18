@@ -113,7 +113,8 @@ static struct pollfd *pfds = NULL;
    All fields are initialized when the array is created or extended.
    If a connection is closed, allocated memory in the record is freed.
 */
-#define UNUSED -6
+#define UNUSED -7
+#define LOGFILE -6
 #define WEB_SERVER -5
 #define CONTROL_SERVER -4
 #define CONTROL_CLIENT_HTTP -3
@@ -121,7 +122,7 @@ static struct pollfd *pfds = NULL;
 #define INCOMPLETE_CLIENT -1
 
 struct client_info {
-  char host[NI_MAXHOST];    /* IP address of this client */
+  char host[NI_MAXHOST+1];  /* IP address of this client */
   char *inputbuf;	    /* For collecting data on partial reads */
   int inputlen;		    /* # of bytes collected in inputbuf */
   char **channels;	    /* Array of subscribed channels */
@@ -393,11 +394,24 @@ static void process_command(const char *t)
 
   } else if (strcmp(t, "status") == 0) {
 
+    logger("-------------------- Logfile --------------------");
+    if (!logfile)
+      logger("Not logging");
+    else
+      logger("%3d  %s", fileno(logfile), clients[fileno(logfile)].host);
+    logger("------------------ Controllers ------------------");
+    logger("  #  HOST           TYPE");
+    for (j = 0; j < nclients; j++)
+      if (clients[j].nchannels == CONTROL_CLIENT)
+	logger("%3d  %-15s  socket", j, clients[j].host);
+      else if (clients[j].nchannels == CONTROL_CLIENT_HTTP)
+	logger("%3d  %-15s  HTTP", j, clients[j].host);
     logger("-------------------- Clients --------------------");
     logger("  #  HOST             CHANNELS");
     for (j = 0; j < nclients; j++) {
       switch (clients[j].nchannels) {
       case UNUSED:
+      case LOGFILE:
       case WEB_SERVER:
       case CONTROL_SERVER:
       case CONTROL_CLIENT:
@@ -430,13 +444,6 @@ static void process_command(const char *t)
 	break;
       }
     }
-    logger("------------------ Controllers ------------------");
-    logger("  #  HOST           TYPE");
-    for (j = 0; j < nclients; j++)
-      if (clients[j].nchannels == CONTROL_CLIENT)
-	logger("%3d  %-15s  socket", j, clients[j].host);
-      else if (clients[j].nchannels == CONTROL_CLIENT_HTTP)
-	logger("%3d  %-15s  HTTP", j, clients[j].host);
     logger("-------------------------------------------------");
 
   } else {
@@ -814,13 +821,9 @@ int main(int argc, char *argv[])
     errx(EX_USAGE, "The URL path (--url, -u) must start with a slash (/)");
 
   /* Log to stdout if running in foreground, or open a logfile for appending. */
-  if (logname) {
-    if (!(logfile = fopen(logname, "a")))
-      err(EX_NOINPUT, "Log file %s", logname);
-  } else if (nodaemon) {
-    logfile = stdout;
-  }
-  if (logfile) setlinebuf(logfile);
+  if (nodaemon) logfile = stdout;
+  if (logname && !(logfile = fopen(logname, "a")))
+    err(EX_NOINPUT, "Log file %s", logname);
 
   /* Set up SSL, if requested. */
   if (cert) {
@@ -905,6 +908,11 @@ int main(int argc, char *argv[])
     clients[httpsock].nchannels = WEB_SERVER;
     pfds[httpsock].fd = httpsock;
   }
+  if (logfile) {
+    strncat(clients[fileno(logfile)].host, logname ? logname : "<stdout>",
+      sizeof(clients[0].host) - 1);
+    clients[fileno(logfile)].nchannels = LOGFILE;
+  }
 
   /* Mark the beginning of the log in the log file. */
   logger("===================================================");
@@ -959,4 +967,9 @@ int main(int argc, char *argv[])
       close_client(j);
     }
   logger("Stopping");
+  if (fifo) close(fifo);
+  if (controlsock) close(controlsock);
+  if (httpsock) close(httpsock);
+  if (logfile) fclose(logfile);
+  return 0;
 }
