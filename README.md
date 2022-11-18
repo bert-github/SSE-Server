@@ -111,7 +111,7 @@ default, 8080) and put this in the Apache configuration:
 
    <Location "/my/sse/server">
       ProxyPass http://localhost:8080/my/sse/server
-   <Location>
+   </Location>
 
 Then run the server, e.g. like this:
 
