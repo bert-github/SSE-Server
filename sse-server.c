@@ -774,7 +774,6 @@ int main(int argc, char *argv[])
     *configname = NULL;
   int nready, c, fifo = -1, controlsock = -1, httpsock = -1, j;
   bool nodaemon = false;
-  char nowstring[26];
   struct passwd *pw;
   time_t now;
   pid_t pid;
@@ -908,8 +907,7 @@ int main(int argc, char *argv[])
   }
 
   /* Mark the beginning of the log in the log file. */
-  now = time(NULL); ctime_r(&now, nowstring); nowstring[24] = '\0';
-  logger("============= %s =============", nowstring);
+  logger("===================================================");
   if (user) logger("Running as user %s (%d)", user, pw->pw_uid);
   logger("Web server listening on port %s", port);
   if (fifo) logger("Controller listening on FIFO %s", fifoname);
