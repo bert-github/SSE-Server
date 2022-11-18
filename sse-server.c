@@ -946,7 +946,8 @@ int main(int argc, char *argv[])
 	close_client(pfds[j].fd);
 
       /* Send a no-op if a web client has been idle too long. */
-      if (now - clients[j].last_write > KEEP_ALIVE_INTERVAL)
+      if (clients[j].nchannels >= 0 &&
+	now > clients[j].last_write + KEEP_ALIVE_INTERVAL)
 	send_keep_alive(j);
     }
   }
