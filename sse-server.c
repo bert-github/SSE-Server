@@ -86,13 +86,15 @@ Author: Bert Bos <bert@w3.org>
 #define POLLRDHUP 0
 #endif
 
+#define KEEP_ALIVE_INTERVAL 15000 /* in ms to keep connections open */
+
 
 /* File descriptors to poll(). The array is indexed by file
    descriptor. Unused entries have pfds[i].fd < 0 */
 static struct pollfd *pfds = NULL;
 
-/* clients is an array with information about each HTTP client. The
-   array is indexed by file descriptor.
+/* clients is an array with information about each file descriptor.
+   The array is indexed by file descriptor.
 
    If nchannels >= 0, the record describes a web client and nchannels
    is the number of channels the client is subscribed to. If nchannels
@@ -100,18 +102,16 @@ static struct pollfd *pfds = NULL;
    specifies the type of connection: unused entry (UNUSED), a
    listening socket for new connections from web clients (WEB_SERVER),
    a listening socket for new connections from control clients
-   (CONTROL_SERVER), a control client or FIFO (CONTROL_CLIENT), or a
-   web client that is connected but did not send headers yet
+   (CONTROL_SERVER), a web client that sent a query
+   (CONTROL_CLIENT_HTTP), a control client or FIFO (CONTROL_CLIENT),
+   or a web client that is connected but did not send headers yet
    (INCOMPLETE_CLIENT).
 
-   Note that fields other than nchannels may be uninitialized. Only
-   records for open file descriptors (those whose pfds[i].fd >= 0) are
-   initialized.
-
    If a new connection is opened with a file descriptor higher than
-   nclients, the array needs to be extended with realloc(). If a
-   connection is closed, allocated memory in the record is freed. If a
-   new connection is opened, the fields are initialized.
+   nclients, the array needs to be extended with realloc().
+
+   All fields are initialized when the array is created or extended.
+   If a connection is closed, allocated memory in the record is freed.
 */
 #define UNUSED -6
 #define WEB_SERVER -5
@@ -127,6 +127,7 @@ struct client_info {
   char **channels;	    /* Array of subscribed channels */
   int nchannels;	    /* # of channels or a client type if < 0 */
   SSL *ssl;		    /* SSL structure, or NULL if not encrypted */
+  time_t last_write;	    /* Time of last write, used for keep-alives */
 };
 static struct client_info *clients = NULL;
 static int nclients = 0;	/* Length of pfds and clients arrays */
@@ -203,6 +204,21 @@ static ssize_t read2(int fd, void *buf, size_t n)
 }
 
 
+/* init_unused_entry -- initialize an entry in the clients and pfds arrays */
+static void init_unused_entry(int i)
+{
+  pfds[i].fd = -1;
+  pfds[i].events = POLLIN | POLLRDHUP;
+  clients[i].nchannels = UNUSED;
+  clients[i].host[0] = '\0';
+  clients[i].inputbuf = NULL;
+  clients[i].inputlen = 0;
+  clients[i].channels = NULL;
+  clients[i].ssl = NULL;
+  clients[i].last_write = 0;
+}
+
+
 /* close_client -- close a connection, clean up stored data */
 static void close_client(const int fd)
 {
@@ -220,16 +236,13 @@ static void close_client(const int fd)
 
   logger("Closing connection %d (%s)", fd, clients[fd].host);
 
-  /* Free memory in the clients info. Set to NULL to prevent double-free. */
+  /* Free memory in the clients info. */
   free(clients[fd].inputbuf);
-  clients[fd].inputbuf = NULL;
   for (i = 0; i < clients[fd].nchannels; i++) free(clients[fd].channels[i]);
   free(clients[fd].channels);
-  clients[fd].channels = NULL;
-  clients[fd].nchannels = UNUSED;
 
-  /* Remove fd from the poll array by setting the entry to -1. */
-  pfds[fd].fd = -1;
+  /* Set clients[fd] to unused and pfds[fd] to -1. Set other fields to NULL. */
+  init_unused_entry(fd);
 }
 
 
@@ -257,27 +270,19 @@ static void accept_new_connection(const int sock, const int client_type)
       log_err(EX_OSERR, "Extending the array of file descriptors");
     if (!(clients = realloc(clients, (fd + 1) * sizeof(*clients))))
       log_err(EX_OSERR, "Extending the array of client information");
-    while (nclients <= fd) {	/* Initialize new entries */
-      clients[nclients].nchannels = UNUSED;
-      pfds[nclients].fd = -1;
-      nclients++;
-    }
+    while (nclients <= fd) init_unused_entry(nclients++);
   }
 
   /* Add the new file descriptor to the poll array. */
   pfds[fd].fd = fd;
-  pfds[fd].events = POLLIN | POLLRDHUP;
-  pfds[fd].revents = 0;
 
   /* Initialize the client data for this file descriptor. */
+  assert(clients[fd].channels == NULL && clients[fd].inputbuf == NULL);
   strcpy(clients[fd].host, host);
-  clients[fd].inputbuf = NULL;
-  clients[fd].inputlen = 0;
-  clients[fd].channels = NULL;
   clients[fd].nchannels = client_type;
-  clients[fd].ssl = NULL;
 
   /* If we are using SSL, do the initial negotiation. Which may fail. */
+  assert(clients[fd].ssl == NULL);
   if (ssl_context) {
     clients[fd].ssl = SSL_new(ssl_context);
     SSL_set_fd(clients[fd].ssl, fd);
@@ -305,7 +310,7 @@ static bool is_subscribed_to(const int fd, char **const channels, int nchannels)
 
 
 /* create_chunk -- create HTTP chunk for message v, also return length */
-static char *create_chunk(const char *t, const char *v, int *len)
+static char *create_chunk(const char *t, const char *v, size_t *len)
 {
   char *s = NULL;
   int i, n = 0;
@@ -329,16 +334,17 @@ static char *create_chunk(const char *t, const char *v, int *len)
   else
     sprintf(s, "%x\r\nevent: %s\ndata: %s\n\n\r\n", n, t, v);
 
+  assert(n + i >= 0);
   *len = n + i;
   return s;
 }
 
 
 /* write_all -- write all data to a socket */
-static void write_all(const int fd, char * const data, const int len)
+static void write_all(const int fd, const void *data, size_t len)
 {
   int i, n = len;
-  char *p = data;
+  const void *p = data;
 
   while (n != 0)
     if ((i = write2(fd, p, n)) >= 0) {
@@ -348,6 +354,9 @@ static void write_all(const int fd, char * const data, const int len)
       log_warn("Writing to client %d", fd);
       close_client(fd);
     }
+
+  /* Remember time, to know when to send the next keep-alive. */
+  clients[fd].last_write = time(NULL);
 }
 
 
@@ -357,7 +366,8 @@ static void send_event_to_web_clients(char **const channels, int nchannels,
 {
   char *chunk;
   bool found;
-  int len, j;
+  size_t len;
+  int j;
 
   chunk = create_chunk(t, v, &len);
   for (found = false, j = 0; j < nclients; j++)
@@ -712,6 +722,14 @@ static void read_request(const int fd, const char *url_path)
 }
 
 
+/* send_keep_alive -- send a no-op to a web client */
+static void send_keep_alive(int fd)
+{
+  assert(clients[fd].nchannels >= 0);
+  write_all(fd, "3\r\n:\n\n\r\n", 8);
+}
+
+
 /* read_config -- read options that are still unset from the configfile */
 static void read_config(const char *filename, bool *nodaemon, char **url,
   char **port, char **logname, char **cert, char **privkey, char **fifoname,
@@ -870,44 +888,23 @@ int main(int argc, char *argv[])
     err(EX_OSERR, "Allocating client data");
   if (!(pfds = calloc(nclients, sizeof(*pfds))))
     err(EX_OSERR, "Allocating poll array");
-  for (j = 0; j < nclients; j++) {
-    pfds[j].fd = -1;
-    clients[j].nchannels = UNUSED;
-  }
+  for (j = 0; j < nclients; j++) init_unused_entry(j);
 
   /* Initialize client info and poll array for the sockets. */
   if (fifo >= 0) {
     strcpy(clients[fifo].host, "FIFO"); /* fifoname may be too long */
-    clients[fifo].inputbuf = NULL;
-    clients[fifo].inputlen = 0;
-    clients[fifo].channels = NULL;
     clients[fifo].nchannels = CONTROL_CLIENT;
-    clients[fifo].ssl = NULL;
     pfds[fifo].fd = fifo;
-    pfds[fifo].events = POLLIN | POLLRDHUP;
-    pfds[fifo].revents = 0;
   }
   if (controlsock >= 0) {
     strcpy(clients[controlsock].host, "control port");
-    clients[controlsock].inputbuf = NULL;
-    clients[controlsock].inputlen = 0;
-    clients[controlsock].channels = NULL;
     clients[controlsock].nchannels = CONTROL_SERVER;
-    clients[controlsock].ssl = NULL;
     pfds[controlsock].fd = controlsock;
-    pfds[controlsock].events = POLLIN | POLLRDHUP;
-    pfds[controlsock].revents = 0;
   }
   if (httpsock >= 0) {
     strcpy(clients[httpsock].host, "http port");
-    clients[httpsock].inputbuf = NULL;
-    clients[httpsock].inputlen = 0;
-    clients[httpsock].channels = NULL;
     clients[httpsock].nchannels = WEB_SERVER;
-    clients[httpsock].ssl = NULL;
     pfds[httpsock].fd = httpsock;
-    pfds[httpsock].events = POLLIN | POLLRDHUP;
-    pfds[httpsock].revents = 0;
   }
 
   /* Mark the beginning of the log in the log file. */
@@ -921,9 +918,11 @@ int main(int argc, char *argv[])
 
   /* Listen for connections, until killed. */
   while (!stop) {
-    nready = poll(pfds, nclients, -1);
+    nready = poll(pfds, nclients, KEEP_ALIVE_INTERVAL);
     if (nready == -1 && errno == EINTR) continue; /* Interrupted by signal */
     if (nready == -1) log_err(EX_OSERR, "While polling");
+
+    now = time(NULL);
 
     /* Check each file descriptor if it has input waiting or is closed. */
     for (j = 0; j < nclients; j++) {
@@ -946,7 +945,9 @@ int main(int argc, char *argv[])
       if (pfds[j].revents & ~POLLIN && pfds[j].fd >= 0)
 	close_client(pfds[j].fd);
 
-      /* pfds[j].revents = 0;	/ * Seems needed to reset POLLRDHUP */
+      /* Send a no-op if a web client has been idle too long. */
+      if (now - clients[j].last_write > KEEP_ALIVE_INTERVAL)
+	send_keep_alive(j);
     }
   }
 
