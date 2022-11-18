@@ -53,3 +53,7 @@ Makefile
 *.o
 *.e
 *~
+config.h
+cexport
+sse-server
+.deps
