@@ -821,7 +821,7 @@ int main(int argc, char *argv[])
   } else if (nodaemon) {
     logfile = stdout;
   }
-  setlinebuf(logfile);
+  if (logfile) setlinebuf(logfile);
 
   /* Set up SSL, if requested. */
   if (cert) {
