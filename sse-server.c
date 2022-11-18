@@ -824,6 +824,7 @@ int main(int argc, char *argv[])
   if (nodaemon) logfile = stdout;
   if (logname && !(logfile = fopen(logname, "a")))
     err(EX_NOINPUT, "Log file %s", logname);
+  if (logfile) setlinebuf(logfile);
 
   /* Set up SSL, if requested. */
   if (cert) {
