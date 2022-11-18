@@ -29,7 +29,7 @@ AC_TYPE_SSIZE_T
 AC_FUNC_FORK
 AC_FUNC_MALLOC
 AC_FUNC_REALLOC
-AC_CHECK_FUNCS([memchr memmove memset mkfifo socket strchr strcspn strdup strerror strndup strpbrk strrchr strtol])
+AC_CHECK_FUNCS([memchr memmove memset memmem mkfifo socket strchr strcspn strdup strerror strndup strpbrk strrchr strtol])
 
 AC_CONFIG_FILES([Makefile])
 AC_OUTPUT
