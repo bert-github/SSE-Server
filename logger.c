@@ -15,8 +15,13 @@ EXPORT FILE *logfile = NULL;
 /* vlogger -- write a log message to the log file, if any */
 EXPORT void vlogger(const char *message, va_list ap)
 {
+  char nowstring[26];		/* YYYY-MM-DD HH:MM:SS±zzzz (RFC 3339) */
+  time_t now;
+
   if (logfile) {
-    fprintf(logfile, "%10ld ", time(NULL));
+    now = time(NULL);
+    strftime(nowstring, sizeof(nowstring) - 1, "%F %T%z", localtime(&now));
+    fprintf(logfile, "%s ", nowstring);
     vfprintf(logfile, message, ap);
     fprintf(logfile, "\n");
   }
