@@ -42,10 +42,6 @@ TODO: Shorten the allocated arrays "clients" and "pfds" when possible?
 Currently, they only get longer (up to the limit imposed by the number
 of open file descriptors.)
 
-TODO: Should the logfile be flushed after writing a line? But if
-people want to watch the log in real time, they can also run the
-server in the foreground with logging to stdout.
-
 TODO: Use POST instead of GET for sending commands?
 
 TODO: Allow a kind of "keep alive" by optionally sending a comment (a
@@ -793,9 +789,6 @@ int main(int argc, char *argv[])
       &privkey, &fifoname, &controlport, &user);
 
   /* Check the arguments. */
-  if (!fifoname && !controlport)
-    errx(EX_USAGE,
-      "At least one of --controlport (-P) and --fifo (-f) must be given");
   if (cert && !privkey)
     errx(EX_USAGE, "Option --cert (-c) requires --privkey (-k)");
   if (!cert && privkey)
@@ -810,6 +803,7 @@ int main(int argc, char *argv[])
   } else if (nodaemon) {
     logfile = stdout;
   }
+  setlinebuf(logfile);
 
   /* Set up SSL, if requested. */
   if (cert) {
