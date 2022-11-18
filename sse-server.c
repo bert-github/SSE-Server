@@ -144,13 +144,13 @@ static struct option longopts[] = {
   {"controlport", required_argument, NULL, 'P'}, /* Default: none */
   {"user", required_argument, NULL, 'U'},	 /* Default: none */
   {"config", required_argument, NULL, 'C'},	 /* Default: none */
-  {"allowcommands", no_argument, NULL, 'a'},	 /* Default: don't allow */
+  {"allowc¥ommands", no_argument, NULL, 'a'},	 /* Default: don't allow */
   {"help", no_argument, NULL, 'h'},		 /* Default: no help */
   {NULL, 0, NULL, 0},
 };
 
 static SSL_CTX *ssl_context = NULL;
-static bool allow_commands = false;
+static bool allowcommands = false;
 static bool stop = false;      /* Control the poll() loop in main() */
 
 
@@ -718,7 +718,7 @@ static void read_request(const int fd, const char *url_path)
       } else {				/* No '=', so it's a command */
 	unesc(t);
 	logger("Received from %d (%s): %s", fd, clients[fd].host, t);
-	if (allow_commands) process_command(t);
+	if (allowcommands) process_command(t);
 	else logger("Commands not allowed from web clients.");
 	/* TODO: Send a 403 instead of a 200? */
       }
@@ -740,7 +740,7 @@ static void send_keep_alive(int fd)
 /* read_config -- read options that are still unset from the configfile */
 static void read_config(const char *filename, bool *nodaemon, char **url,
   char **port, char **logname, char **cert, char **privkey, char **fifoname,
-  char **controlport, char **user)
+  char **controlport, char **user, bool *allowcommands)
 {
   char *line = NULL, *opt, *val, *t;
   size_t linecap = 0;
@@ -762,6 +762,7 @@ static void read_config(const char *filename, bool *nodaemon, char **url,
     else if (!strcmp(opt, "fifo") && !*fifoname) *fifoname = strdup(val);
     else if (!strcmp(opt, "controlport") && !*controlport) *controlport = strdup(val);
     else if (!strcmp(opt, "user") && !*user) *user = strdup(val);
+    else if (!strcmp(opt, "allowcommands")) *allowcommands = true;
     else if (opt[0] == '#') ;	/* Comment */
     else if (opt[0]) errx(EX_DATAERR, "Unknown option in configfile: %s", opt);
   }
@@ -798,7 +799,7 @@ int main(int argc, char *argv[])
     case 'P': controlport = optarg; break;
     case 'U': user = optarg; break;
     case 'C': configname = optarg; break;
-    case 'a': allow_commands = true; break;
+    case 'a': allowcommands = true; break;
     case 'h': help(); exit(0);
     case ':': usage("Missing argument for option -%c", optopt);
     case '?': usage("Unknown or ambiguous option %c", optopt);
@@ -810,7 +811,7 @@ int main(int argc, char *argv[])
   /* Read config file, if any, to set not yet specified options. */
   if (configname)
     read_config(configname, &nodaemon, &url_path, &port, &logname, &cert,
-      &privkey, &fifoname, &controlport, &user);
+      &privkey, &fifoname, &controlport, &user, &allowcommands);
 
   /* Check the arguments. */
   if (cert && !privkey)
@@ -919,7 +920,7 @@ int main(int argc, char *argv[])
   logger("===================================================");
   if (user) logger("Running as user %s (%d)", user, pw->pw_uid);
   logger("Web server listening on port %s", port);
-  if (fifo) logger("Controller listening on FIFO %s", fifoname);
+  if (fifoname) logger("Controller listening on FIFO %s", fifoname);
   if (controlport) logger("Controller listening on port %s", controlport);
   if (!nodaemon) logger("Running in background, process id %d", pid);
 
