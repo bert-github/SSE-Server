@@ -86,7 +86,7 @@ Author: Bert Bos <bert@w3.org>
 #define POLLRDHUP 0
 #endif
 
-#define KEEP_ALIVE_INTERVAL 15000 /* in ms to keep connections open */
+#define KEEP_ALIVE_INTERVAL 15 /* in seconds, to keep connections open */
 
 
 /* File descriptors to poll(). The array is indexed by file
@@ -323,7 +323,7 @@ static char *create_chunk(const char *t, const char *v, size_t *len)
     n = snprintf(s, 0, "event: %s\ndata: %s\n\n", t, v);
 
   /* Compute the length of the header and trailer of the chunk. */
-  i = snprintf(s, 0, "%x\r\n\r\n", n);
+  i = snprintf(s, 0, "%X\r\n\r\n", n);
 
   /* Allocate n + i + 1 bytes (including \0), for the whole HTTP chunk. */
   if (!(s = malloc(n + i + 1)))
@@ -331,9 +331,9 @@ static char *create_chunk(const char *t, const char *v, size_t *len)
 
   /* Now write the chunk into s. This should not fail. */
   if (strcmp(t, "message") == 0)
-    sprintf(s, "%x\r\ndata: %s\n\n\r\n", n, v);
+    sprintf(s, "%X\r\ndata: %s\n\n\r\n", n, v);
   else
-    sprintf(s, "%x\r\nevent: %s\ndata: %s\n\n\r\n", n, t, v);
+    sprintf(s, "%X\r\nevent: %s\ndata: %s\n\n\r\n", n, t, v);
 
   assert(n + i >= 0);
   *len = n + i;
@@ -926,7 +926,7 @@ int main(int argc, char *argv[])
 
   /* Listen for connections, until killed. */
   while (!stop) {
-    nready = poll(pfds, nclients, KEEP_ALIVE_INTERVAL);
+    nready = poll(pfds, nclients, 1000 * KEEP_ALIVE_INTERVAL);
     if (nready == -1 && errno == EINTR) continue; /* Interrupted by signal */
     if (nready == -1) log_err(EX_OSERR, "While polling");
 
