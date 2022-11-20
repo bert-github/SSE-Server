@@ -779,8 +779,8 @@ int main(int argc, char *argv[])
 {
   char *logname = NULL, *cert = NULL, *privkey = NULL, *fifoname = NULL,
     *user = NULL, *url_path = "/", *port = "8080", *controlport = NULL,
-    *configname = NULL;
-  int nready, c, fifo = -1, controlsock = -1, httpsock = -1, j;
+    *configname = NULL, *buf = NULL;
+  int nready, c, fifo = -1, controlsock = -1, httpsock = -1, j, n;
   bool nodaemon = false;
   struct passwd *pw;
   time_t now;
@@ -918,10 +918,23 @@ int main(int argc, char *argv[])
 
   /* Mark the beginning of the log in the log file. */
   logger("===================================================");
-  if (user) logger("Running as user %s (%d)", user, pw->pw_uid);
+
+  for (n = 9, j = 0; j < argc; j++) n += 1 + strlen(argv[j]);
+  buf = malloc(n);
+  strcpy(buf, "Command:");
+  for (j = 0; j < argc; j++) strcat(strcat(buf, " "), argv[j]);
+  logger("%s", buf);
+  free(buf);
+
+  if (configname) logger("Read configuration from %s", configname);
+  logger("URL path prefix is %s", url_path);
   logger("Web server listening on port %s", port);
+  if (logname) logger("Logging to file %s", logname);
+  if (cert) logger("SSL enabled, cert %s and private key %s", cert, privkey);
   if (fifoname) logger("Controller listening on FIFO %s", fifoname);
   if (controlport) logger("Controller listening on port %s", controlport);
+  if (user) logger("Running as user %s (%d)", user, pw->pw_uid);
+  logger("Commands on control port %s", allowcommands ? "enabled" : "disabled");
   if (!nodaemon) logger("Running in background, process id %d", pid);
 
   /* Listen for connections, until killed. */
