@@ -39,23 +39,23 @@ the same simple text lines as the control port.
 Let's assume the SSE-Server is running on host www.example.org and
 listening on port 8080 for URLs like this:
 
-> https‍://www.example.org:8080/my/sse/server
+> https‍://www.example‍.org:8080/my/sse/server
 
 Then a client can subscribe to, e.g., the channels ‘color’, ‘number’
 and ‘page’ by adding those to the path. The order does not matter:
 
-> https‍://www.example.org:8080/my/se/server<b>/color/number/page</b>
+> https‍://www.example‍.org:8080/my/se/server<b>/color/number/page</b>
 
 In SSE, each message must have a type (the event type) and a content
 (the event data), both of which are arbitrary text strings. To send a
 message of type ‘message’ with content ‘first’ to all clients on the
 ‘color’ channel, make a GET request to this URL:
 
-> https‍://www.example.org:8080/my/sse/server<b>/color?message=first</b>
+> https‍://www.example‍.org:8080/my/sse/server<b>/color?message=first</b>
 
 You can send multiple messages to multiple channels in one go:
 
-> https‍://www.example.org:8080/my/sse/server<b>/color/page?q1=go&q2=end</b>
+> https‍://www.example‍.org:8080/my/sse/server<b>/color/page?q1=go&q2=end</b>
 
 This sends two messages (type ‘q1’ with data ‘go’ and type ‘q2’ with
 data ‘end’) to both the color and page channels. (Clients subscribed
