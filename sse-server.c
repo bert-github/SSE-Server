@@ -47,6 +47,10 @@ TODO: Use POST instead of GET for sending commands?
 TODO: Allow a kind of "keep alive" by optionally sending a comment (a
 line starting with ":") every 15 seconds or so to all web clients?
 
+TODO: If the FIFO was created by us, remove it when the program ends?
+
+TODO: If the fifo already exists, check that it is actually a fifo?
+
 Created: 12 November 2022
 Author: Bert Bos <bert@w3.org>
 */
@@ -869,7 +873,7 @@ int main(int argc, char *argv[])
       errx(EX_UNAVAILABLE, "Unable to use private key %s: %s", privkey,
 	ERR_error_string(ERR_get_error(), NULL));
 
-    /* Do not aks for client certificates. */
+    /* Do not ask for client certificates. */
     SSL_CTX_set_verify(ssl_context, SSL_VERIFY_NONE, NULL);
   }
 
