@@ -144,7 +144,7 @@ static struct option longopts[] = {
   {"controlport", required_argument, NULL, 'P'}, /* Default: none */
   {"user", required_argument, NULL, 'U'},	 /* Default: none */
   {"config", required_argument, NULL, 'C'},	 /* Default: none */
-  {"allowc¥ommands", no_argument, NULL, 'a'},	 /* Default: don't allow */
+  {"allowcommands", no_argument, NULL, 'a'},	 /* Default: don't allow */
   {"help", no_argument, NULL, 'h'},		 /* Default: no help */
   {NULL, 0, NULL, 0},
 };
@@ -177,7 +177,7 @@ static void help(void)
   printf("  --controlport, -P <port>  Listen for commands on <port>\n");
   printf("  --fifo, -F <file>         Listen for commands of <fifo>\n");
   printf("  --port, -p <port>         Listen for web clients on <port>\n");
-  printf("  --url, -u <path>          URL path must begin with <path>\n");
+  printf("  --urlpath, -u <path>      URL path must begin with <path>\n");
   printf("  --cert, -c <certfile>     Turn on SSL, use certificate <cert>\n");
   printf("  --privkey, -k <privkey>   SSL private key from file <privkey>\n");
   printf("  --logfile, -l <file>      Append a log to <file>\n");
@@ -737,34 +737,60 @@ static void send_keep_alive(int fd)
 }
 
 
+#define match(opt, longopt, shortopt)					\
+  (!strcmp((opt), (longopt)) || !strcmp((opt), (shortopt)))
+
+#define set2(param, opt, val, rest)					\
+  do {									\
+    if (!val)								\
+      errx(EX_DATAERR,"%s:%d: Missing argument after %s",filename, n, opt); \
+    else if (rest)							\
+      errx(EX_DATAERR,"%s:%d: Unexpected text: %s", filename, n, rest);	\
+    else if (!param)							\
+      param = strdup(val);						\
+  } while (0)
+
+#define set1(param, val)						\
+  do {									\
+    if (val)								\
+      errx(EX_DATAERR, "%s:%d: Unexpected text: %s", filename, n, val);	\
+    else								\
+      param = true;							\
+  } while (0)
+
+
 /* read_config -- read options that are still unset from the configfile */
 static void read_config(const char *filename, bool *nodaemon, char **url,
   char **port, char **logname, char **cert, char **privkey, char **fifoname,
   char **controlport, char **user, bool *allowcommands)
 {
-  char *line = NULL, *opt, *val, *t;
+  char *line = NULL, *opt, *val, *rest, *t;
   size_t linecap = 0;
   FILE *f;
+  int n = 0;
 
   if (!(f = fopen(filename, "r")))
     log_err(EX_NOINPUT, "Configuration file %s", filename);
 
   while (getline(&line, &linecap, f) != -1) {
+    n++;
     t = line;
     do opt = strsep(&t, " \t\r\n"); while (opt && opt[0] == '\0');
     do val = strsep(&t, " \t\r\n"); while (val && val[0] == '\0');
-    if (!strcmp(opt, "nodaemon")) *nodaemon = true;
-    else if (!strcmp(opt, "url") && !*url) *url = strdup(val);
-    else if (!strcmp(opt, "port") && !*port) *port = strdup(val);
-    else if (!strcmp(opt, "logfile") && !*logname) *logname = strdup(val);
-    else if (!strcmp(opt, "cert") && !*cert) *cert = strdup(val);
-    else if (!strcmp(opt, "provkey") && !*privkey) *privkey = strdup(val);
-    else if (!strcmp(opt, "fifo") && !*fifoname) *fifoname = strdup(val);
-    else if (!strcmp(opt, "controlport") && !*controlport) *controlport = strdup(val);
-    else if (!strcmp(opt, "user") && !*user) *user = strdup(val);
-    else if (!strcmp(opt, "allowcommands")) *allowcommands = true;
-    else if (opt[0] == '#') ;	/* Comment */
-    else if (opt[0]) errx(EX_DATAERR, "Unknown option in configfile: %s", opt);
+    do rest = strsep(&t, " \t\r\n"); while (rest && rest[0] == '\0');
+    if (!opt || opt[0] == '#') ; /* Empty line or comment, ignore */
+    else if match(opt, "--urlpath", "-u") set2(*url, opt, val, rest);
+    else if match(opt, "--port", "-p") set2(*port, opt, val, rest);
+    else if match(opt, "--logfile", "-l") set2(*logname, opt, val, rest);
+    else if match(opt, "--cert", "-c") set2(*cert, opt, val, rest);
+    else if match(opt, "--privkey", "-k") set2(*privkey, opt, val, rest);
+    else if match(opt, "--fifo", "-F") set2(*fifoname, opt, val, rest);
+    else if match(opt, "--controlport", "-P") set2(*controlport, opt, val,rest);
+    else if match(opt, "--user", "-U") set2(*user, opt, val, rest);
+    else if match(opt, "--nodaemon", "-n") set1(*nodaemon, val);
+    else if match(opt, "--allowcommands", "-a") set1(*allowcommands, val);
+    else if (opt[0])
+      errx(EX_DATAERR, "%s:%d: Incorrect option: %s", filename, n, opt);
   }
   if (ferror(f))
     log_err(EX_IOERR, "Configuration file %s", filename);
@@ -778,7 +804,7 @@ static void read_config(const char *filename, bool *nodaemon, char **url,
 int main(int argc, char *argv[])
 {
   char *logname = NULL, *cert = NULL, *privkey = NULL, *fifoname = NULL,
-    *user = NULL, *url_path = "/", *port = "8080", *controlport = NULL,
+    *user = NULL, *url_path = NULL, *port = NULL, *controlport = NULL,
     *configname = NULL, *buf = NULL;
   int nready, c, fifo = -1, controlsock = -1, httpsock = -1, j, n;
   bool nodaemon = false;
@@ -812,6 +838,10 @@ int main(int argc, char *argv[])
   if (configname)
     read_config(configname, &nodaemon, &url_path, &port, &logname, &cert,
       &privkey, &fifoname, &controlport, &user, &allowcommands);
+
+  /* Set defaults. */
+  if (!url_path) url_path = "/";
+  if (!port) port = "8080";
 
   /* Check the arguments. */
   if (cert && !privkey)
