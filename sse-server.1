@@ -1,0 +1,368 @@
+.TH SSE-SERVER 1 "2022-11-21" "SSE-Server"
+.SH NAME
+sse-server \- daemon for sending Server-Sent Events to web clients
+.
+.de d \" begin display
+.sp
+.in +4
+.nf
+.ft CR
+.CDS
+..
+.de e \" end display
+.CDE
+.in -4
+.fi
+.ft R
+.sp
+..
+.SH SYNOPSIS
+.B "sse-server"
+.RI "[" "long-options" "]"
+.RB "[" "\-n" "]"
+.RB "[" "\-u"
+.IR "url-path" "]"
+.RB "[" "\-p"
+.IR "port" "]"
+.RB "[" "\-l"
+.IR "logfile" "]"
+.RB "[" "\-c"
+.IR "ssl-cert" "]"
+.RB "[" "\-k"
+.IR "ssl-privkey" "]"
+.RB "[" "\-F"
+.IR "fifo" "]"
+.RB "[" "\-P"
+.IR "controlport" "]"
+.RB "[" "\-U"
+.IR "user" "]"
+.RB "[" "\-C"
+.IR "configfile" "]"
+.RB "[" "\-a" "]"
+.PP
+.B "sse-server -h"
+.SH DESCRIPTION
+.B sse-server
+is an HTTP server that delivers Server-Sent Events to web clients, as
+defined by HTML5. A web client (typically a browser with an HTML page
+that contains JavaScript that uses EventSource) connects to the server
+and then waits for text lines representing events. An \(oqevent\(cq in
+this case is a pair of text strings: the event type and the event
+data.
+.PP
+.B sse-server
+itself gets input in various ways with instructions about what events
+to send to connected web clients. E.g., the server can get input from
+a local FIFO. A local user can thus write text to that FIFO, which the
+server will forward to connected clients.
+.SS Connecting to the server
+The server maintains an arbitrary number of \(oqchannels\(cq. Web
+clients subscribe to one or more channels in order to get the events
+that are sent on that channel. E.g., if the URL of the server is
+\(oqhttps://example.org/sse\(cq, then a client can subscribe to the
+channels \(oqchannel1\(cq and \(oqchannel2\(cq by requesting the URL
+.d
+https://example.org/sse/channel1/channel2
+.e
+The order of the channels does not matter.
+.PP
+A web client that does not mention any channels will be subscribed to
+all available channels.
+.SS Generating events with a URL query
+There are three ways to give instructions to the server. The first way
+is to make an HTTP request with a query in the URL. (Such a query can
+be the result of submitting an HTML form, e.g.). Assuming the URL of
+the server is \(oqhttps://example.org/sse\(cq and you want to send the
+event \(oqfoo\(cq with data \(oqbar\(cq to all clients on
+\(oqchannel1\(cq, you make a request to this URL:
+.d
+https://example.org/sse/channel1?foo=bar
+.e
+You can send the same event to multiple channels by listing them all,
+e.g:
+.d
+https://example.org/sse/channel1/channel2?foo=bar
+.e
+You can also send multiple events in the same request:
+.d
+https://example.org/sse/channel1?foo1=bar1&foo2=bar2
+.e
+And by combining the above you can send multiple events to multiple
+channels. In this case web clients that are subscribed to multiple
+channels will only get one copy of each event.
+.SS Generating events with a FIFO
+The second way to instruct the server is to write to a FIFO. This
+requires that the
+.B \-F
+option was given on the command line. The FIFO accepts instructions as
+lines of the form
+.d
+.IR channel / type " = " data
+.e
+The
+.I channel
+is the channel to send an event to, the
+.I type
+is the event type and
+.I data
+is the event data. Leading and trailing spaces, and spaces around the
+equals sign, are ignored.
+.PP
+If the
+.I type
+is exactly \(oqmessage\(cq, it can be omitted: \(oqchannel1 = boo\(cq
+is the same as \(oqchannel1/message = boo\(cq.
+.PP
+The FIFO is useful for generating events form the command line. E.g.,
+if the FIFO is called sse.fifo, use something like this:
+.d
+echo "channel1/foo = bar" > sse.fifo
+.e
+.SS Generating events with a control port
+The third way to send instructions is to send them to the control
+port. This port is separate from the port on which the server listens
+for HTTP connections. It must be specified with the
+.B \-P
+option.
+.PP
+The syntax for instructions is the same as for the FIFO. If the
+server's control port is 8086 and it is not using SSL, you can, e.g.,
+send instructions to the server with nc(1):
+.d
+echo "channel1/foo = bar" | nc -q0 example.org 8085
+.e
+or, if SSL encryption is turned on (see option
+.BR "\-c" "),"
+use openssl:
+.d
+echo "channel1/foo = bar" | \e
+openssl s_client -connect example.org:8085
+.e
+.SS Special commands
+Apart from instructions to send events,
+.B sse-server
+also accepts two commands:
+.TP
+.B status
+\(oqstatus\(cq tells
+.B sse-server
+to add information about its current status to the log file, in
+particular a list of currently connected clients. This obviously only
+has effect if logging is turned on, see the option
+.BR \-l .
+Use it, e.g., like this:
+.d
+echo status > sse.fifo
+.e
+.TP
+.B halt
+\(oqhalt\(cq tells
+.B sse-server
+to close all connections and exit. E.g.:
+.d
+echo halt > sse.fifo
+.e
+These commands can be written to the FIFO, but
+.B sse-server
+normally doesn't accept them on the control port or in queries on the
+HTTP port. The
+.B \-a
+option can change that.
+.SH OPTIONS
+.B sse-server
+accepts the following options:
+.TP
+.B \-\-help
+.TQ
+.B \-h
+Print a short help message explaining the command line options and
+then exit.
+.TP
+.B \-\-nodaemon
+.TQ
+.B \-n
+Do not run in the background. Normally,
+.B sse-server
+detaches from the terminal and runs as a background daemon. With this
+option it runs in the foreground. It will also write log messages to
+standard output, unless directed elsewhere with
+.BR \-l .
+.TP
+.BI "\-\-url " "url-path"
+.TQ
+.BI "\-u " "url-path"
+Set the prefix of the URL path. Web clients that connect to
+.B sse-server
+must start the URL path with the given
+.IR url-path .
+E.g., if the server is running on
+example.org and
+.I url-path
+is \(oq/p12/sse\(cq, clients must connect to
+\(oqhttps://example.org/p12/sse\(cq. Any channel names are added after
+this. E.g., to subscribe to channel \(oqchannel6\(cq, the URL becomes
+\(oqhttps://example.org/p12/sse/channel6\(cq.
+.IP
+The
+.I url-path
+must start with a slash (/). The default is \(oq/\(cq.
+.TP
+.BI "\-\-port " "port"
+.TQ
+.BI "\-p " "port"
+Set the port on which to listen for HTTP connections. By default,
+.B sse-server
+listens for connections fro web clients on port 8080. This option
+changes the port. (Note that ports below 1024 require root
+privileges.)
+.TP
+.BI "\-\-logfile " "logfile"
+.TQ
+.BI "\-l " "logfile"
+Turn on logging to a file. Normally,
+.B sse-server
+does not write a log (unless running in the foreground, see
+.BR "\-n" ")."
+This option turns on log writing.
+.B sse-server
+will
+.I append
+to
+.I logfile
+if it already exists. Otherwise it will create the file.
+.TP
+.BI "\-\-cert " "ssl-cert"
+.TQ
+.BI "\-c " "ssl-cert"
+Turn on SSL-encryption of all connections.
+.B sse-server
+will identify itself to clients with the given certificate.
+Both HTTP connections
+.RB "(" "\-p" ")"
+and connections to the control port
+.RB "(" "\-P" ")"
+will be encrypted. If
+.B \-c
+is given,
+.B \-k
+must also be present.
+.TP
+.BI "\-\-privkey " "ssl-privkey"
+.TQ
+.BI "\-k " "ssl-privkey"
+Turn on SSL-encryption of all connections.
+.I ssl-privkey
+is the private key corresponding to the certificate given by
+.BR \-c .
+If
+.B \-k
+is given,
+.B \-c
+must also be present.
+.TP
+.BI "\-\-fifo " "fifo"
+.TQ
+.BI "\-F " "fifo"
+Open a FIFO.
+.B sse-server
+will accept events and commands on this file. The FIFO will be created
+if it does not yet exist.
+.TP
+.BI "\-\-controlport " "controlport"
+.TQ
+.BI "\-P " "controlport"
+Listen for events on a separate port. This tells
+.B sse-server
+to listen on
+.I controlport
+for connections. Clients connected to this port can send events (and
+maybe commands, see
+.BR "\-a" ")."
+with the same syntax as on the FIFO. This port does not accept HTTP.
+.TP
+.BI "\-\-user " "user"
+.TQ
+.BI "\-U " "user"
+Make
+.B sse-server
+run as the specified user, instead of the user that started the
+program. This is useful if the program was started by root, to avoid
+that it runs with root privileges.
+.B sse-server
+switches to the given user after reading the configuration file and
+the SSL certificate, but before opening any ports and the FIFO, and
+before going into the background.
+.TP
+.BI "\-\-config " "configfile"
+.TQ
+.BI "\-C " "configfile"
+.B sse-server
+Read options from a configuration file. Command line options override
+options in the configuration file. See under \(oqFILES\(cq below for
+the syntax of this file.
+.TP
+.B \-\-allowcommands
+.TQ
+.B \-a
+Allow commands (not only events) on the HTTP port and the control
+port. Commands (\(oqstatus\(cq, \(oqhalt\(cq) are normally only
+allowed on the FIFO. With this option
+.B sse-server
+will also allow commands in the query part of requests on the HTTP
+port
+.RB "(" "\-p" ")"
+and in lines received on the control port
+.RB "(" "\-P" ")."
+.SH EXIT STATUS
+Exit status is 0 when the program exists normally (after receiving a
+\(oqhalt\(cq command) and non-zero if an unrecoverable error occurred.
+.SH FILES
+.TP
+.I configfile
+(See option
+.BR "\-C" ")"
+Empty lines in the configuration file and lines that start with a hash
+mark (#) are ignored. Other lines must start with the name of an
+option (\(oq\-\-urlpath\(cq, \(oq\-\-port\(cq, \(oq-c\(cq, etc.)
+followed by the option's argument, if any. Spaces and tabs are
+ignored. Here is an example:
+.d
+--urlpath /ddd/sse
+--port 971
+--user nobody
+-c certfile
+.e
+\" .SH NOTES
+.SH BUGS
+.B sse-server
+sends empty comments to web clients when there are no events to send.
+This is to avoid that any proxies or firewalls in between the server
+and the client close idle connections. These comments are sent 15
+seconds after the last activity and then every 15 seconds, until there
+is a new event to send. (This is the recommendation in the HTML5
+specification.) There is currently no option to turn these messages
+off or change the interval.
+.PP
+On the FIFO and the control port, there is currently no way to include
+newlines in events, to send events that start or end with spaces, or
+to use channel name or event types that contain slashes or spaces.
+.SH SEE ALSO
+.IP \(bu
+.UR https://html.spec.whatwg.org/multipage/server-sent-events.html
+Server-Sent Events
+.UE
+in the HTML5 specification
+.IP \(bu
+.UR https://github.com/hyper-prog/hasses
+hasses
+.UE ,
+another SSE server
+.IP \(bu
+.UR https://www.w3.org/Talks/Tools/b6plus/
+b6+
+.UE ,
+a framework for HTML slides that can be controlled via SSE
+.IP \(bu
+.BR nc (1)
+.IP \(bu
+.BR openssl (1)
