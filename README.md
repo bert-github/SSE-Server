@@ -2,7 +2,7 @@
 
 SSE-Server implements an HTTP server that sends Server-Sent Events
 (see [section 9.2 of
-HTML5](https://html.spec.whatwg.org/multipage/server-sent-events.html)
+HTML5](https://html.spec.whatwg.org/multipage/server-sent-events.html))
 to connected web clients. (Typically: web pages with JavaScript that
 uses the EventSource API.)
 
