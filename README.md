@@ -132,3 +132,7 @@ And use it as normal, but without the port 8080:
 <code>https://example.org/my/sse/server/channel71</code>
 </pre>
 
+## Acknowledgments
+
+SSE-Server was inspired by
+[hasses](https://github.com/hyper-prog/hasses) by Péter Deák.
