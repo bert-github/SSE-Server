@@ -16,8 +16,6 @@ string.
 
 
 
-TODO: Support event types also on the FIFO.
-
 TODO: An option to require authentication to connect to the control
 port?
 
@@ -30,10 +28,7 @@ TODO: Implement replay with the Last-Event-ID header.
 TODO: Use HTTP/2.
 
 TODO: Close connections after a certain time, configurable via an
-option. Clients can reconnect if they are still interested. (When
-running under an Apache as reverse proxy, Apache will close to
-connection after 600 seconds of idleness, due to the "Keep-Alive:
-timeout=600" header that we send.)
+option. Clients can reconnect if they are still interested.
 
 TODO: Escapes to allow arbitrary characters in events, for data that
 contains newlines or binary data.
@@ -43,9 +38,6 @@ Currently, they only get longer (up to the limit imposed by the number
 of open file descriptors.)
 
 TODO: Use POST instead of GET for sending commands?
-
-TODO: Allow a kind of "keep alive" by optionally sending a comment (a
-line starting with ":") every 15 seconds or so to all web clients?
 
 TODO: If the FIFO was created by us, remove it when the program ends?
 
@@ -71,6 +63,7 @@ Author: Bert Bos <bert@w3.org>
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/file.h>
 #include <fcntl.h>
 #include <pwd.h>
 #include <string.h>
@@ -860,6 +853,9 @@ int main(int argc, char *argv[])
   if (logname && !(logfile = fopen(logname, "a")))
     err(EX_NOINPUT, "Log file %s", logname);
   if (logfile) setlinebuf(logfile);
+  if (logfile && logfile != stdout)
+    if (flock(fileno(logfile), LOCK_EX | LOCK_NB) == -1)
+      err(EX_TEMPFAIL, "Cannot get an exclusive lock on %s", logname);
 
   /* Set up SSL, if requested. */
   if (cert) {
@@ -922,6 +918,7 @@ int main(int argc, char *argv[])
   if (fifo >= nclients) nclients = fifo + 1;
   if (controlsock >= nclients) nclients = controlsock + 1;
   if (httpsock >= nclients) nclients = httpsock + 1;
+  if (logfile && fileno(logfile) >= nclients) nclients = fileno(logfile) + 1;
   if (!(clients = malloc(nclients * sizeof(*clients))))
     err(EX_OSERR, "Allocating client data");
   if (!(pfds = calloc(nclients, sizeof(*pfds))))
