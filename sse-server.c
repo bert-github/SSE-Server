@@ -110,11 +110,12 @@ static struct pollfd *pfds = NULL;
    All fields are initialized when the array is created or extended.
    If a connection is closed, allocated memory in the record is freed.
 */
-#define UNUSED -7
-#define LOGFILE -6
-#define WEB_SERVER -5
-#define CONTROL_SERVER -4
-#define CONTROL_CLIENT_HTTP -3
+#define UNUSED -8
+#define LOGFILE -7
+#define WEB_SERVER -6
+#define CONTROL_SERVER -5
+#define CONTROL_CLIENT_HTTP -4
+#define CONTROL_CLIENT_FIFO -3
 #define CONTROL_CLIENT -2
 #define INCOMPLETE_CLIENT -1
 
@@ -391,20 +392,20 @@ static void process_command(const char *t)
 
   } else if (strcmp(t, "status") == 0) {
 
-    logger("-------------------- Logfile --------------------");
+    logger("---- Logfile ------------------------------------");
     if (!logfile)
       logger("Not logging");
     else
       logger("%3d  %s", fileno(logfile), clients[fileno(logfile)].host);
-    logger("------------------ Controllers ------------------");
-    logger("  #  HOST           TYPE");
+    logger("---- Controllers --------------------------------");
     for (j = 0; j < nclients; j++)
       if (clients[j].nchannels == CONTROL_CLIENT)
-	logger("%3d  %-15s  socket", j, clients[j].host);
+	logger("%3d  socket  %s", j, clients[j].host);
       else if (clients[j].nchannels == CONTROL_CLIENT_HTTP)
-	logger("%3d  %-15s  HTTP", j, clients[j].host);
-    logger("-------------------- Clients --------------------");
-    logger("  #  HOST             CHANNELS");
+	logger("%3d  HTTP    %s", j, clients[j].host);
+      else if (clients[j].nchannels == CONTROL_CLIENT_FIFO)
+	logger("%3d  FIFO    %s", j, clients[j].host);
+    logger("---- Clients ------------------------------------");
     for (j = 0; j < nclients; j++) {
       switch (clients[j].nchannels) {
       case UNUSED:
@@ -412,6 +413,7 @@ static void process_command(const char *t)
       case WEB_SERVER:
       case CONTROL_SERVER:
       case CONTROL_CLIENT:
+      case CONTROL_CLIENT_FIFO:
       case CONTROL_CLIENT_HTTP:
 	break;
       case INCOMPLETE_CLIENT:
@@ -927,8 +929,8 @@ int main(int argc, char *argv[])
 
   /* Initialize client info and poll array for the sockets. */
   if (fifo >= 0) {
-    strcpy(clients[fifo].host, "FIFO"); /* fifoname may be too long */
-    clients[fifo].nchannels = CONTROL_CLIENT;
+    strncat(clients[fifo].host, fifoname, sizeof(clients[0].host) - 1);
+    clients[fifo].nchannels = CONTROL_CLIENT_FIFO;
     pfds[fifo].fd = fifo;
   }
   if (controlsock >= 0) {
@@ -983,6 +985,9 @@ int main(int argc, char *argv[])
       /* Handle incoming data (even if the connection is about to close) */
       if (pfds[j].revents & POLLIN &&
 	clients[pfds[j].fd].nchannels == CONTROL_CLIENT)
+	handle_command(pfds[j].fd);
+      else if (pfds[j].revents & POLLIN &&
+	clients[pfds[j].fd].nchannels == CONTROL_CLIENT_FIFO)
 	handle_command(pfds[j].fd);
       else if (pfds[j].revents & POLLIN &&
 	clients[pfds[j].fd].nchannels == CONTROL_SERVER)
