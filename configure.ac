@@ -13,8 +13,7 @@ AC_PROG_MAKE_SET
 AC_PROG_CPP
 
 # Checks for libraries.
-AC_CHECK_LIB([crypto], [CRYPTO_malloc], , AC_MSG_ERROR([libcrypto not found]))
-AC_CHECK_LIB([ssl], [SSL_write], , AC_MSG_WARN([libssl not found]))
+AX_CHECK_OPENSSL
 
 # Checks for header files.
 AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h sys/socket.h unistd.h])

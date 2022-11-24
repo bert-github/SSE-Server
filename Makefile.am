@@ -7,7 +7,9 @@ EXPORTS = connectsock.e logger.e memmem.e
 BUILT_SOURCES = $(EXPORTS)
 sse_server_SOURCES = sse-server.c connectsock.c logger.c memmem.c
 cexport_SOURCES = cexport.c
-LDADD = -lssl -lcrypto
+LDADD = @OPENSSL_LIBS@
+AM_LDFLAGS = @OPENSSL_LDFLAGS@
+AM_CPPFLAGS = @OPENSSL_INCLUDES@
 SUFFIX = .c:sC .l:sC .y:sC .e:h .h:h
 SUFFIXES = .1 .e .html
 
