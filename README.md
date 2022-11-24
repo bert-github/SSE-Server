@@ -104,8 +104,9 @@ enabled) with information about currently connected clients.
 
     echo halt > sse/fifo
 
-These commands can be given on the FIFO and the control port. They can
-be given as a query on the HTTP port only if exicitly enabled.
+These commands can be given on the FIFO. The server normally does
+not accept them on the control port or in a query on the HTTP
+port, but there is an option to enable that.
 
 ## Running under Apache
 
@@ -125,9 +126,13 @@ Then run the server, e.g. like this:
 
     sse-server -f sse-server.fifo -P 8085 -l sse-server.log
 
-And use it as normal, but on port 80 (http) or 443 (https), not 8080:
+And use it as normal, but without the port 8080:
 
 <pre>
 <code>https://example.org/my/sse/server/channel71</code>
 </pre>
 
+## Acknowledgments
+
+SSE-Server was inspired by
+[hasses](https://github.com/hyper-prog/hasses) by Péter Deák.
