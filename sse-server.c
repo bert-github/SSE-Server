@@ -160,7 +160,7 @@ static void usage(const char *msg,...)
   va_start(ap, msg);
   if (msg) {vfprintf(stderr, msg, ap); fprintf(stderr, "\n");}
   fprintf(stderr, "Usage: sse-server [-n] [-u urlpath] [-p port] [-l logfile]"
-	  " [-c ssl-cert] [-k ssl-privkey] [-f fifo] [-P controlport] [-U user]"
+	  " [-c ssl-cert] [-k ssl-privkey] [-F fifo] [-P controlport] [-U user]"
 	  " [-C configfile] [-h]\n");
   va_end(ap);
   exit(EX_USAGE);
