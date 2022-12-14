@@ -658,7 +658,7 @@ static void read_request(const int fd, const char *url_path)
     if (len) {
       if (!(channels = realloc(channels, (nchannels + 1) * sizeof(*channels))))
 	log_err(EX_OSERR, "Parsing request path");
-      if (!(channels[nchannels++] = strndup(t, len)))
+      if (!(channels[nchannels++] = unesc(strndup(t, len))))
 	log_err(EX_OSERR, "Parsing request path");
     }
     t += len;
@@ -967,7 +967,8 @@ int main(int argc, char *argv[])
   if (fifoname) logger("Controller listening on FIFO %s", fifoname);
   if (controlport) logger("Controller listening on port %s", controlport);
   if (user) logger("Running as user %s (%d)", user, pw->pw_uid);
-  logger("Commands on control port %s", allowcommands ? "enabled" : "disabled");
+  logger("%s", allowcommands ? "Commands allowed on web and control port" :
+    "Commands not allowed on web or dcontrol port");
   if (!nodaemon) logger("Running in background, process id %d", pid);
 
   /* Listen for connections, until killed. */
