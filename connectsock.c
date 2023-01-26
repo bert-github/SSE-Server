@@ -1,14 +1,32 @@
-/* connectsock.c
- *
- * Part of HTML-XML-utils, see:
- * http://www.w3.org/Tools/HTML-XML-utils/
- *
- * Copyright © 1994-2011 World Wide Web Consortium
- * See http://www.w3.org/Consortium/Legal/copyright-software
- *
- * Author: Bert Bos <bert@w3.org>
- * Created: 12 May 1998
- **/
+/*
+  connectsock() connects to a host and port over TCP or UDP. It
+  returns a file descriptor suitable for reading and writing (but not
+  seeking), or -1 in case of an error. The error is stored in errno.
+  The port may be specified as a decimal number or as the name of a
+  well-known service (listed in /etc/services).
+
+  connectTCP() and connectUDP() are the same, but without the
+  "protocol" argument. Instead, they always connect over TCP and UDP,
+  respectively.
+
+  passivesock() creates a server socket for TCP or UDP that listens on
+  a port. It returns a file descriptor for reading and writing (as
+  soon as a client connects to it), or -1 in case of an error. The
+  error is stored in errno. The port may be specified as a decimal
+  number or as the name of a well-known service (listed in
+  /etc/services).
+
+  passiveTCP() and passiveUDP() are the same, but without the
+  "protocol" argument. Instead, they always use TCP and UDP,
+  respectively.
+
+  fconnectTCP() and fconnectUDP() are like the similarly named
+  functions without "f", but return a FILE pointer instead of a file
+  descriptor.
+
+  Author: Bert Bos <bert@w3.org>
+  Created: 12 May 1998
+*/
 
 #include "config.h"
 #include <sys/types.h>
@@ -26,13 +44,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdio.h>
 #include "export.h"
-
-EXPORT u_short portbase = 0;			/* for non-root servers */
 
 
 /* connectsock -- allocate & connect a socket using TCP or UDP */
-EXPORT int connectsock(const char *host, const char *service, char *protocol)
+EXPORT int connectsock(const char * const host, const char * const service,
+		       const char * const protocol)
 {
   /* host = name of host to which connection is desired		*/
   /* service = service associated with the desired port		*/
@@ -60,20 +78,40 @@ EXPORT int connectsock(const char *host, const char *service, char *protocol)
   return s;			/* If -1 no address succeeded */
 }
 
+
 /* connectTCP -- connect to a specified UDP service on a specified host */
-EXPORT int connectTCP(const char *host, const char *service)
+EXPORT int connectTCP(const char * const host, const char * const service)
 {
   return connectsock(host, service, "tcp");
 }
 
+
 /* connectUDP -- connect to a specified UDP service on a specified host */
-EXPORT int connectUDP(char *host, char *service)
+EXPORT int connectUDP(const char * const host, const char * const service)
 {
   return connectsock(host, service, "udp");
 }
 
+
+/* fconnectTCP -- connect to a specified TCP service on a specified host */
+EXPORT FILE *fconnectTCP(const char * const host, const char * const service)
+{
+  int fd = connectTCP(host, service);
+  return fd == -1 ? NULL : fdopen(fd, "r+");
+}
+
+
+/* fconnectUDP -- connect to a specified UDP service on a specified host */
+EXPORT FILE *fconnectUDP(const char * const host, const char * const service)
+{
+  int fd = connectUDP(host, service);
+  return fd == -1 ? NULL : fdopen(fd, "r+");
+}
+
+
 /* passivesock -- allocate & bind a server socket using TCP or UDP */
-EXPORT int passivesock(char *service, char *protocol, int qlen)
+EXPORT int passivesock(const char * const service,
+		       const char * const protocol, int qlen)
 {
   /* service = service associated with the desired port		*/
   /* protocol = name of protocol to use ("tcp" or "udp")	*/
@@ -108,16 +146,18 @@ EXPORT int passivesock(char *service, char *protocol, int qlen)
   return s;
 }
 
-/* passiveTCP -- creat a passive socket for use in a TCP server */
-EXPORT int passiveTCP(char *service, int qlen)
+
+/* passiveTCP -- create a passive socket for use in a TCP server */
+EXPORT int passiveTCP(const char * const service, int qlen)
 {
   /* service = service associated with the desired port		*/
   /* qlen = maximum server request queue length			*/
   return passivesock(service, "tcp", qlen);
 }
 
-/* passiveUDP -- creat a passive socket for use in a UDP server */
-EXPORT int passiveUDP(char *service)
+
+/* passiveUDP -- create a passive socket for use in a UDP server */
+EXPORT int passiveUDP(const char * const service)
 {
   return passivesock(service, "udp", 0);
 }
