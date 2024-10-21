@@ -173,7 +173,7 @@ static void help(void)
   printf("sse-server sents server-sent events to HTTP clients\n");
   printf("Usage: sse-server [options]\n");
   printf("  --controlport, -P <port>  Listen for commands on <port>\n");
-  printf("  --fifo, -F <file>         Listen for commands of <fifo>\n");
+  printf("  --fifo, -F <file>         Listen for commands on <fifo>\n");
   printf("  --port, -p <port>         Listen for web clients on <port>\n");
   printf("  --urlpath, -u <path>      URL path must begin with <path>\n");
   printf("  --cert, -c <certfile>     Turn on SSL, use certificate <cert>\n");
