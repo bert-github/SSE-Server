@@ -968,7 +968,7 @@ int main(int argc, char *argv[])
   if (controlport) logger("Controller listening on port %s", controlport);
   if (user) logger("Running as user %s (%d)", user, pw->pw_uid);
   logger("%s", allowcommands ? "Commands allowed on web and control port" :
-    "Commands not allowed on web or dcontrol port");
+    "Commands not allowed on web or control port");
   if (!nodaemon) logger("Running in background, process id %d", pid);
 
   /* Listen for connections, until killed. */
